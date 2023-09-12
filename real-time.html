@@ -1,0 +1,801 @@
+{% extends "base.html" %}
+{%block title %}Plots :: Real Time Fan{% endblock %}
+{% block rtCSS %}<link rel="stylesheet" type="text/css" href="static/css/realtimedisplay.css">{% endblock %}
+{% block moreHeadScript %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/1.6.19/topojson.min.js"></script>
+<script src='https://code.jquery.com/jquery-2.0.3.js'></script>
+{% endblock %}
+{% block bodyClass %}class="real-time-page"{% endblock %}
+{% block realtimeNavActive %}active{% endblock %}
+
+{% block body %}
+<section class="story-section real-time-display section section-on-bg ">
+    
+    <div id='server-down' class="alert alert-warning text-center" style="display:none;position:fixed;top:300px;left:25%;width:50%;" role="alert">
+        <i class="fas fa-exclamation-triangle"></i>  SuperDARN Canada's data server is down for maintenance, real-time data will be unavailable at this time!
+    </div>
+    
+    <div id='no-aurora-data' class="alert alert-warning text-center" style="display:none;position:fixed;top:300px;left:25%;width:50%;" role="alert">
+        <i class="fas fa-exclamation-triangle"></i>  The NOAA Aurora OVATION model data is unavailable at this time!
+    </div>
+    
+    <div id='radar-select-button' style=''>
+        <span><p><strong>RADARS </strong><i id='radar-hamburger' class="fas fa-bars"></i></p></span>
+    </div>
+    
+    <div id='radar-options-container' class="alert alert-light" style="">
+        <div id="radar-selection">
+            <div class="radar-wrapper">
+                <div class="saskatoon radar-abbrv">SAS</div>
+                <div class="rankin radar-abbrv">RKN</div>
+                <div class="clyde radar-abbrv">CLY</div>
+                <div class="inuvik radar-abbrv">INV</div>
+                <div class="princegeorge radar-abbrv">PGR</div>
+                <div class="blackstone radar-abbrv">BKS</div>
+                <div class="forthayswest radar-abbrv">FHW</div>
+                <div class="forthayseast radar-abbrv">FHE</div>
+                <div class="kapuskasing radar-abbrv">KAP</div>
+                <div class="goosebay radar-abbrv">GBR</div>
+                <div class="christmasvalleyeast radar-abbrv">CVE</div>
+                <div class="christmasvalleywest radar-abbrv">CVW</div>
+                <div class="mcmurdo radar-abbrv">MCM</div>
+                <div class="kodiak radar-abbrv">KOD</div>
+                <div class="hokkaidoeast radar-abbrv">HOK</div>
+                <div class="hokkaidowest radar-abbrv">HKW</div>
+            </div>
+            <div id="radar-section">
+                <table id="radartable" class="table-style text-align" style="display:none;">
+                    <tr>
+                        <td><input id="sas-check" type="checkbox" name="saskatoon" value="Saskatoon"></td>
+                        <td><input type="checkbox" name="rankin" value="Rankin Inlet"></td>
+                        <td><input type="checkbox" name="princegeorge" value="Prince George"></td>
+                        <td><input type="checkbox" name="clyde" value="Clyde River"></td>
+                        <td><input type="checkbox" name="inuvik" value="Inuvik"></td>
+                        <td><input type="checkbox" name="blackstone" value="Blackstone"></td>
+                        <td><input type="checkbox" name="forthayseast" value="Fort Hays East"></td>
+                        <td><input type="checkbox" name="forthayswest" value="Fort Hays West"></td>
+                        <td><input type="checkbox" name="kapuskasing" value="Kapuskasing"></td>
+                        <td><input type="checkbox" name="goosebay" value="Goose Bay"></td>
+                        <td><input type="checkbox" name="christmasvalleyeast" value="Christmas Valley East"></td>
+                        <td><input type="checkbox" name="christmasvalleywest" value="Christmas Valley West"></td>
+                        <td><input type="checkbox" name="mcmurdo" value="McMurdo"></td>
+                        <td><input type="checkbox" name="kodiak" value="Kodiak"></td>
+                        <td><input type="checkbox" name="hokkaidoeast" value="Hokkaido East"></td>
+                        <td><input type="checkbox" name="hokkaidowest" value="Hokkaido West"></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        <div id="no-data-alert" style="display:none">
+        </div>
+    </div>
+    
+    <div id='options-select-button' style=''>
+        <span><p><strong>OPTIONS </strong><i id='options-hamburger' class="fas fa-bars"></i></p></span>
+    </div>
+    
+    <div id="options-container" class="alert alert-light" style="">
+        <div class="container">
+            <div id="radio-section" class='row justify-content-around'>
+                <div id="radar-select-dropdown" class='col-md-5 col-sm-6 m-0'>
+                    <div class="btn-group">
+                        <button id="dropdownMenuButton" type="button" style="padding: 15px 12px 0px;" class="btn btn-secondary dropdown-toggle dropdown-toggle-split description-style" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><span>Velocity</span><i class="fas fa-chevron-down"></i></button>
+                        <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+                            <a class="dropdown-item" id="velocity" href="#">Velocity</a>
+                            <a class="dropdown-item" id="pwr" href="#">Signal to Noise Ratio</a>
+                            <a class="dropdown-item" id="width" href="#">Spectral Width</a>
+                            <a class="dropdown-item" id="elevation" href="#">Elevation</a>
+                        </div>
+                    </div>
+                </div>
+              
+                <div class='col-md-4 col-sm-5 d-flex justify-content-end' style='margin-top:10px;'>
+                    <button id='auroral-button' type="button" class="btn btn-outline-success">Aurora<sup>+</sup> <br> OFF</button>
+                </div>
+            
+            
+                <div class="colorgrad-div-style"  class='col-12'>
+                    <div id="colorgrad" class="colorgrad-style"></div>
+                </div>
+            
+             
+            
+                <div id='groundscatter-bar'  class='col-6'>
+                    <div class='row'>
+                        <div id="groundscatter-box" class='col-6'>
+                            <svg width="75" height="25">
+                                <rect x="50" y="5" width="25" height="18" fill="#383838"></rect>
+                            </svg>
+                        </div>
+                        <div class='col-6' style='padding:0;'>
+                            <p id="groundscat-text" style="color: #000000;font-size:10px;margin: 5px 0 0 0;">ground scatter</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="description" class="description-style col-12">Plasma drift velocity along the beam direction (<strong style="color:#1E0AFF;">blue</strong> – towards the radar; <strong style="color:#F00909;">red</strong> – away from the radar; <strong style="color:#383838;">grey</strong> for ground scatter).
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="text-center">
+        <div class="globe-wrapper">
+            <div id="globediv" class="globe-style" style="z-index: -1"></div>
+        </div>
+    </div>
+    
+    <div class="radar-data">
+        <div class="row  d-flex justify-content-center">
+            <div class="col-xl-4 col-lg-6 col-md-6 col-sm-12" id="saskatoon" style="display: none">
+                <div class="radar-card">
+                    <h3 class="card-title radar-heading">Saskatoon</h3>
+                    <div class="card-body">
+                        <table class='table'>
+                            <tbody>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Control Program:</p></td>
+                                    <td class="card-info"><p id="saskatooncp"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Frequency (kHz):</p></td>
+                                    <td class="card-info"><p id="saskatoonfreq"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Sky Noise:</p></td>
+                                    <td class="card-info"><p id="saskatoonnoise"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Number of Averages:</p></td>
+                                    <td class="card-info"><p id="saskatoonave"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Range Separation (km)*:</p></td>
+                                    <td class="card-info"><p id="saskatoonrsep"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Time (UTC):</p></td>
+                                    <td class="card-info"><p id="saskatoontime"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Institution:</p></td>
+                                    <td class="card-info"><p id="saskatooninst">
+                                        <a href="https://artsandscience.usask.ca/physics/facilities/isas.php" target="_blank">University of Saskatchewan</a>
+                                    </p></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-4 col-lg-6 col-md-6 col-sm-12" id="rankin" style="display: none">
+                <div class="radar-card">
+                    <h3 class="card-title radar-heading">Rankin Inlet</h3>
+                    <div class="card-body">
+                        <table class='table'>
+                            <tbody>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Control Program:</p></td>
+                                    <td class="card-info"><p id="rankincp"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Frequency (kHz):</p></td>
+                                    <td class="card-info"><p id="rankinfreq"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Sky Noise:</p></td>
+                                    <td class="card-info"><p id="rankinnoise"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Number of Averages:</p></td>
+                                    <td class="card-info"><p id="rankinave"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Range Separation (km)*:</p></td>
+                                    <td class="card-info"><p id="rankinrsep"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Time (UTC):</p></td>
+                                    <td class="card-info"><p id="rankintime"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Institution:</p></td>
+                                    <td class="card-info"><p id="rankininst">
+                                        <a href="https://artsandscience.usask.ca/physics/facilities/isas.php" target="_blank">University of Saskatchewan</a>
+                                    </p></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-4 col-lg-6 col-md-6 col-sm-12" id="princegeorge" style="display: none">
+                <div class="radar-card">
+                    <h3 class="card-title radar-heading">Prince George</h3>
+                    <div class="card-body">
+                        <table class='table'>
+                            <tbody>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Control Program:</p></td>
+                                    <td class="card-info"><p id="princegeorgecp"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Frequency (kHz):</p></td>
+                                    <td class="card-info"><p id="princegeorgefreq"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Sky Noise:</p></td>
+                                    <td class="card-info"><p id="princegeorgenoise"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Number of Averages:</p></td>
+                                    <td class="card-info"><p id="princegeorgeave"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Range Separation (km)*:</p></td>
+                                    <td class="card-info"><p id="princegeorgersep"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Time (UTC):</p></td>
+                                    <td class="card-info"><p id="princegeorgetime"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Institution:</p></td>
+                                    <td class="card-info"><p id="princegeorgeinst">
+                                        <a href="https://artsandscience.usask.ca/physics/facilities/isas.php" target="_blank">University of Saskatchewan</a>
+                                    </p></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-4 col-lg-6 col-md-6 col-sm-12" id="clyde"  style="display: none">
+                <div class="radar-card">
+                    <h3 class="card-title radar-heading">Clyde River</h3>
+                    <div class="card-body">
+                        <table class='table'>
+                            <tbody>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Control Program:</p></td>
+                                    <td class="card-info"><p id="clydecp"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Frequency (kHz):</p></td>
+                                    <td class="card-info"><p id="clydefreq"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Sky Noise:</p></td>
+                                    <td class="card-info"><p id="clydenoise"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Number of Averages:</p></td>
+                                    <td class="card-info"><p id="clydeave"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Range Separation (km)*:</p></td>
+                                    <td class="card-info"><p id="clydersep"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Time (UTC):</p></td>
+                                    <td class="card-info"><p id="clydetime"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Institution:</p></td>
+                                    <td class="card-info"><p id="clydeinst">
+                                        <a href="https://artsandscience.usask.ca/physics/facilities/isas.php" target="_blank">University of Saskatchewan</a>
+                                    </p></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-4 col-lg-6 col-md-6 col-sm-12" id="forthayseast" style="display: none">
+                <div class="radar-card">
+                    <h3 class="card-title radar-heading">Fort Hays East</h3>
+                    <div class="card-body">
+                        <table class='table'>
+                            <tbody>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Control Program:</p></td>
+                                    <td class="card-info"><p id="forthayseastcp"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Frequency (kHz):</p></td>
+                                    <td class="card-info"><p id="forthayseastfreq"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Sky Noise:</p></td>
+                                    <td class="card-info"><p id="forthayseastnoise"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Number of Averages:</p></td>
+                                    <td class="card-info"><p id="forthayseastave"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Range Separation (km)*:</p></td>
+                                    <td class="card-info"><p id="forthayseastrsep"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Time (UTC):</p></td>
+                                    <td class="card-info"><p id="forthayseasttime"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Institution:</p></td>
+                                    <td class="card-info"><p id="forthayseastinst">
+                                        <a href="http://vt.superdarn.org/tiki-index.php" target="_blank">Virginia Tech</a>
+                                    </p></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-4 col-lg-6 col-md-6 col-sm-12" id="forthayswest" style="display: none">
+                <div class="radar-card">
+                    <h3 class="card-title radar-heading">Fort Hays West</h3>
+                    <div class="card-body">
+                        <table class='table'>
+                            <tbody>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Control Program:</p></td>
+                                    <td class="card-info"><p id="forthayswestcp"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Frequency (kHz):</p></td>
+                                    <td class="card-info"><p id="forthayswestfreq"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Sky Noise:</p></td>
+                                    <td class="card-info"><p id="forthayswestnoise"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Number of Averages:</p></td>
+                                    <td class="card-info"><p id="forthayswestave"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Range Separation (km)*:</p></td>
+                                    <td class="card-info"><p id="forthayswestrsep"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Time (UTC):</p></td>
+                                    <td class="card-info"><p id="forthayswesttime"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Institution:</p></td>
+                                    <td class="card-info"><p id="forthayswestinst">
+                                        <a href="http://vt.superdarn.org/tiki-index.php" target="_blank">Virginia Tech</a>
+                                    </p></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-4 col-lg-6 col-md-6 col-sm-12" id="kapuskasing" style="display: none">
+                <div class="radar-card">
+                    <h3 class="card-title radar-heading">Kapuskasing</h3>
+                    <div class="card-body">
+                        <table class='table'>
+                            <tbody>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Control Program:</p></td>
+                                    <td class="card-info"><p id="kapuskasingcp"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Frequency (kHz):</p></td>
+                                    <td class="card-info"><p id="kapuskasingfreq"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Sky Noise:</p></td>
+                                    <td class="card-info"><p id="kapuskasingnoise"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Number of Averages:</p></td>
+                                    <td class="card-info"><p id="kapuskasingave"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Range Separation (km)*:</p></td>
+                                    <td class="card-info"><p id="kapuskasingrsep"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Time (UTC):</p></td>
+                                    <td class="card-info"><p id="kapuskasingtime"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Institution:</p></td>
+                                    <td class="card-info"><p id="kapuskasinginst">
+                                        <a href="http://vt.superdarn.org/tiki-index.php" target="_blank">Virginia Tech</a>
+                                    </p></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-4 col-lg-6 col-md-6 col-sm-12" id="goosebay" style="display: none">
+                <div class="radar-card">
+                    <h3 class="card-title radar-heading" style="color:black;">Goose Bay</h3>
+                    <div class="card-body">
+                        <table class='table'>
+                            <tbody>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Control Program:</p></td>
+                                    <td class="card-info"><p id="goosebaycp"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Frequency (kHz):</p></td>
+                                    <td class="card-info"><p id="goosebayfreq"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Sky Noise:</p></td>
+                                    <td class="card-info"><p id="goosebaynoise"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Number of Averages:</p></td>
+                                    <td class="card-info"><p id="goosebayave"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Range Separation (km)*:</p></td>
+                                    <td class="card-info"><p id="goosebayrsep"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Time (UTC):</p></td>
+                                    <td class="card-info"><p id="goosebaytime"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Institution:</p></td>
+                                    <td class="card-info"><p id="goosebayinst">
+                                        <a href="http://vt.superdarn.org/tiki-index.php" target="_blank">Virginia Tech</a>
+                                    </p></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-4 col-lg-6 col-md-6 col-sm-12" id="christmasvalleyeast"  style="display: none">
+                <div class="radar-card">
+                    <h3 class="card-title radar-heading" style="color:black;">Christmas Valley East</h3>
+                    <div class="card-body">
+                        <table class='table'>
+                            <tbody>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Control Program:</p></td>
+                                    <td class="card-info"><p id="christmasvalleyeastcp"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Frequency (kHz):</p></td>
+                                    <td class="card-info"><p id="christmasvalleyeastfreq"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Sky Noise:</p></td>
+                                    <td class="card-info"><p id="christmasvalleyeastnoise"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Number of Averages:</p></td>
+                                    <td class="card-info"><p id="christmasvalleyeastave"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Range Separation (km)*:</p></td>
+                                    <td class="card-info"><p id="christmasvalleyeastrsep"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Time (UTC):</p></td>
+                                    <td class="card-info"><p id="christmasvalleyeasttime"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Institution:</p></td>
+                                    <td class="card-info"><p id="christmasvalleyeastinst">
+                                        <a href="http://superdarn.thayer.dartmouth.edu/" target="_blank">Dartmouth College</a>
+                                    </p></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-4 col-lg-6 col-md-6 col-sm-12" id="christmasvalleywest"  style="display: none">
+                <div class="radar-card">
+                    <h3 class="card-title radar-heading">Christmas Valley West</h3>
+                    <div class="card-body">
+                        <table class='table'>
+                            <tbody>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Control Program:</p></td>
+                                    <td class="card-info"><p id="christmasvalleywestcp"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Frequency (kHz):</p></td>
+                                    <td class="card-info"><p id="christmasvalleywestfreq"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Sky Noise:</p></td>
+                                    <td class="card-info"><p id="christmasvalleywestnoise"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Number of Averages:</p></td>
+                                    <td class="card-info"><p id="christmasvalleywestave"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Range Separation (km)*:</p></td>
+                                    <td class="card-info"><p id="christmasvalleywestrsep"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Time (UTC):</p></td>
+                                    <td class="card-info"><p id="christmasvalleywesttime"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Institution:</p></td>
+                                    <td class="card-info"><p id="christmasvalleywestinst">
+                                        <a href="http://superdarn.thayer.dartmouth.edu/" target="_blank">Dartmouth College</a>
+                                    </p></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-4 col-lg-6 col-md-6 col-sm-12" id="inuvik"  style="display: none">
+                <div class="radar-card">
+                    <h3 class="card-title radar-heading">Inuvik</h3>
+                    <div class="card-body">
+                        <table class='table'>
+                            <tbody>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Control Program:</p></td>
+                                    <td class="card-info"><p id="inuvikcp"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Frequency (kHz):</p></td>
+                                    <td class="card-info"><p id="inuvikfreq"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Sky Noise:</p></td>
+                                    <td class="card-info"><p id="inuviknoise"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Number of Averages:</p></td>
+                                    <td class="card-info"><p id="inuvikave"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Range Separation (km)*:</p></td>
+                                    <td class="card-info"><p id="inuvikrsep"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Time (UTC):</p></td>
+                                    <td class="card-info"><p id="inuviktime"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Institution:</p></td>
+                                    <td class="card-info"><p id="inuvikinst">
+                                        <a href="https://artsandscience.usask.ca/physics/facilities/isas.php" target="_blank">University of Saskatchewan</a>
+                                    </p></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-4 col-lg-6 col-md-6 col-sm-12" id="blackstone"  style="display: none">
+                <div class="radar-card">
+                    <h3 class="card-title radar-heading" style="color:black;">Blackstone</h3>
+                    <div class="card-body">
+                        <table class='table'>
+                            <tbody>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Control Program:</p></td>
+                                    <td class="card-info"><p id="blackstonecp"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Frequency (kHz):</p></td>
+                                    <td class="card-info"><p id="blackstonefreq"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Sky Noise:</p></td>
+                                    <td class="card-info"><p id="blackstonenoise"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Number of Averages:</p></td>
+                                    <td class="card-info"><p id="blackstoneave"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Range Separation (km)*:</p></td>
+                                    <td class="card-info"><p id="blackstonersep"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Time (UTC):</p></td>
+                                    <td class="card-info"><p id="blackstonetime"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Institution:</p></td>
+                                    <td class="card-info"><p id="blackstoneinst">
+                                        <a href="http://vt.superdarn.org/tiki-index.php" target="_blank">Virginia Tech</a>
+                                    </p></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-4 col-lg-6 col-md-6 col-sm-12" id="mcmurdo"  style="display: none">
+                <div class="radar-card">
+                    <h3 class="card-title radar-heading" style="color:black;">McMurdo</h3>
+                    <div class="card-body">
+                        <table class='table'>
+                            <tbody>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Control Program:</p></td>
+                                    <td class="card-info"><p id="mcmurdocp"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Frequency (kHz):</p></td>
+                                    <td class="card-info"><p id="mcmurdofreq"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Sky Noise:</p></td>
+                                    <td class="card-info"><p id="mcmurdonoise"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Number of Averages:</p></td>
+                                    <td class="card-info"><p id="mcmurdoave"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Range Separation (km)*:</p></td>
+                                    <td class="card-info"><p id="mcmurdorsep"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Time (UTC):</p></td>
+                                    <td class="card-info"><p id="mcmurdotime"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Institution:</p></td>
+                                    <td class="card-info"><p id="mcmurdoinst">
+                                        <!-- Still Alaska Website for info on these radars  -->
+                                        <a href="https://superdarn.gi.alaska.edu/" target="_blank">PennState</a>
+                                    </p></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-4 col-lg-6 col-md-6 col-sm-12" id="kodiak"  style="display: none">
+                <div class="radar-card">
+                    <h3 class="card-title radar-heading">Kodiak</h3>
+                    <div class="card-body">
+                        <table class='table'>
+                            <tbody>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Control Program:</p></td>
+                                    <td class="card-info"><p id="kodiakcp"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Frequency (kHz):</p></td>
+                                    <td class="card-info"><p id="kodiakfreq"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Sky Noise:</p></td>
+                                    <td class="card-info"><p id="kodiaknoise"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Number of Averages:</p></td>
+                                    <td class="card-info"><p id="kodiakave"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Range Separation (km)*:</p></td>
+                                    <td class="card-info"><p id="kodiakrsep"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Time (UTC):</p></td>
+                                    <td class="card-info"><p id="kodiaktime"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Institution:</p></td>
+                                    <td class="card-info"><p id="kodiakinst">
+                                        <!-- Still Alaska Website for info on these radars  -->
+                                        <a href="https://superdarn.gi.alaska.edu/" target="_blank">PennState</a>
+                                    </p></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-4 col-lg-6 col-md-6 col-sm-12" id="hokkaidoeast"  style="display: none">
+                <div class="radar-card">
+                    <h3 class="card-title radar-heading" style="color:black;">Hokkaido East</h3>
+                    <div class="card-body">
+                        <table class='table'>
+                            <tbody>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Control Program:</p></td>
+                                    <td class="card-info"><p id="hokkaidoeastcp"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Frequency (kHz):</p></td>
+                                    <td class="card-info"><p id="hokkaidoeastfreq"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Sky Noise:</p></td>
+                                    <td class="card-info"><p id="hokkaidoeastnoise"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Number of Averages:</p></td>
+                                    <td class="card-info"><p id="hokkaidoeastave"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Range Separation (km)*:</p></td>
+                                    <td class="card-info"><p id="hokkaidoeastrsep"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Time (UTC):</p></td>
+                                    <td class="card-info"><p id="hokkaidoeasttime"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Institution:</p></td>
+                                    <td class="card-info"><p id="hokkaidoeastinst">
+                                        <a href="http://cicr.isee.nagoya-u.ac.jp/hokkaido/" target="_blank">Nagoya University</a>
+                                    </p></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-4 col-lg-6 col-md-6 col-sm-12" id="hokkaidowest"  style="display: none">
+                <div class="radar-card">
+                    <h3 class="card-title radar-heading" style="color:black;">Hokkaido West</h3>
+                    <div class="card-body">
+                        <table class='table'>
+                            <tbody>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Control Program:</p></td>
+                                    <td class="card-info"><p id="hokkaidowestcp"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Radar Frequency (kHz):</p></td>
+                                    <td class="card-info"><p id="hokkaidowestfreq"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Sky Noise:</p></td>
+                                    <td class="card-info"><p id="hokkaidowestnoise"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Number of Averages:</p></td>
+                                    <td class="card-info"><p id="hokkaidowestave"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Range Separation (km)*:</p></td>
+                                    <td class="card-info"><p id="hokkaidowestrsep"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Time (UTC):</p></td>
+                                    <td class="card-info"><p id="hokkaidowesttime"></p></td>
+                                </tr>
+                                <tr>
+                                    <td class="card-info"><p class="radar-subheading">Institution:</p></td>
+                                    <td class="card-info"><p id="hokkaidowestinst">
+                                        <a href="http://cicr.isee.nagoya-u.ac.jp/hokkaido/" target="_blank">Nagoya University</a>
+                                    </p></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 d-flex justify-content-center">
+                <p style='color:white;'><sup>*</sup> darker lines on the fan plots denote multiples of 20 range gates (~900 km)<br>
+                <sup>+</sup> auroral oval is estimated by the OVATION model hosted by 
+                <a href='https://www.swpc.noaa.gov/products/aurora-30-minute-forecast' target='_blank'>NOAA</a>
+                <br>&nbsp;&nbsp;&nbsp;opacity correlates to the probability of viewing the aurora</p>
+            </div>
+        </div>
+    </section><!--//story-video-->
+    
+{% endblock %} 
+{% block rtmorejs %}
+<script type="text/javascript" src="static/js/realtimedisplay.js"></script>
+{% endblock %}
